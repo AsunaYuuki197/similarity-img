@@ -64,6 +64,7 @@ cd similarity_img
 **4. Install Requirements from 'requirements.txt'**
 ```python
 pip install -r requirements.txt
+pip install torch torchvision xformers --index-url https://download.pytorch.org/whl/cu121
 ```
 
 **5. Run and enter the appeared URL host**

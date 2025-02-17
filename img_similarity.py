@@ -1,10 +1,11 @@
 import streamlit as st
-from PIL import Image
 import numpy as np
+from numpy.linalg import norm
 import os
 import requests
 from io import BytesIO
 from bs4 import BeautifulSoup
+from get_embedding import *
 
 st.title("Image Comparison App")
 
@@ -83,7 +84,12 @@ def compare_images_matrix(img1, img2):
     return difference
 
 
-# compare by image context - feature (still in developing)
+# compare by image context - feature
+def compare_images_feature(img1, img2):
+    img1_embedding = get_image_embedding(img1)
+    img2_embedding = get_image_embedding(img2)
+    return np.dot(img1_embedding,img2_embedding)/(norm(img1_embedding)*norm(img2_embedding)) # Cosine Similarity 
+
 
 
 # Image source selection
@@ -112,7 +118,9 @@ uploaded_image = st.file_uploader("Upload an image to compare:", type=["png", "j
 
 
 # Image comparison
-if st.button("Compare") and   st.session_state.image_links and uploaded_image is not None:
+compare = st.radio("Compare by:", ("Matrix", "Feature"))
+
+if st.button("Compare") and st.session_state.image_links and uploaded_image is not None:
     img1 = Image.open(uploaded_image)
     st.image(img1, caption="Uploaded Image", use_container_width=True)
 
@@ -122,15 +130,19 @@ if st.button("Compare") and   st.session_state.image_links and uploaded_image is
     for link in st.session_state.image_links:
         img2 = load_image(link)
 
-        # Compare by matrix
-        matrix_diff = compare_images_matrix(img1, img2)
+        if compare == "Matrix":
+            # Compare by matrix
+            diff_score = compare_images_matrix(img1, img2)
         
-        if matrix_diff > 0.1:
-            continue
+            if diff_score > 0.1:
+                continue
+        else:
+            # Compare by embedding 
+            diff_score = compare_images_feature(img1, img2)
+            if diff_score < 0.85:
+                continue
 
-        # Compare by embedding (still in developing)
-
-        results.append((link, matrix_diff))
+        results.append((link, diff_score))
 
     st.write("Comparison complete. Displaying from the selected source...")    
     # Return result image + image links
