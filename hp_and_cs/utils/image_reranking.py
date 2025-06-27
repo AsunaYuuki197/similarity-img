@@ -128,7 +128,8 @@ def MatchFeatures(query_locations,
     _, indices = index_image_tree.query(
         query_descriptors,
         distance_upper_bound=descriptor_matching_threshold,
-        n_jobs=-1) # indices (1000,)
+        # n_jobs=-1,
+        workers=-1) # indices (1000,)
 
     # Select feature locations for putative matches. 
     query_locations_to_use = np.array([
@@ -154,7 +155,9 @@ def MatchFeatures(query_locations,
       min_samples=_MIN_RANSAC_SAMPLES,
       residual_threshold=ransac_residual_threshold,
       max_trials=_NUM_RANSAC_TRIALS,
-      random_state=ransac_seed) #inliers (12,)
+      # random_state=ransac_seed
+      rng=ransac_seed
+      ) #inliers (12,)
   match_viz_bytes = b''
   
 

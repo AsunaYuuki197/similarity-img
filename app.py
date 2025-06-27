@@ -20,7 +20,7 @@ from hp_and_cs.utils.retrieval_component import connect_nodup
 
 
 # Constants
-MODEL_NAME = 'gl18-tl-resnet101-gem-w'
+MODEL_NAME = 'delg_r50'
 DATASET = 'roxford5k'
 DATA_ROOT = 'dataset'
 FEATURE_NAME = MODEL_NAME
