@@ -192,13 +192,13 @@ def find_dominant(Gs,first_search,q):
         global N_RANSAC
         N_RANSAC+=1
         
-        img1 = cv2.imread('data/oxford5k/jpg/'+_dataset_meta['qimlist'][q]+'.jpg',cv2.IMREAD_COLOR)  
+        img1 = cv2.imread('../dataset/roxford5k/jpg/'+_dataset_meta['qimlist'][q]+'.jpg',cv2.IMREAD_COLOR)  
         a,b,c,d=_dataset_meta['gnd'][q]['bbx']
         left, upper, right, lower=int(a),int(b),int(c),int(d) #(left, upper, right, lower)
         img1=img1[upper:lower,left:right] #[y1:y2, x1:x2]
         gray1 = cv2.cvtColor(img1,cv2.COLOR_BGR2GRAY)
         
-        img2 = cv2.imread('data/oxford5k/jpg/'+_dataset_meta['imlist'][i]+'.jpg',cv2.IMREAD_COLOR)  
+        img2 = cv2.imread('../dataset/roxford5k/jpg/'+_dataset_meta['imlist'][i]+'.jpg',cv2.IMREAD_COLOR)  
         gray2 = cv2.cvtColor(img2,cv2.COLOR_BGR2GRAY)
         
         
