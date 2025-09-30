@@ -60,7 +60,7 @@ source bin/activate
 
 Open a terminal at a directory of your choice and enter these commands (change the folder name if you want to):
 ```
-  git clone https://git.cloud9-solutions.com/ai-intern-25/image-retrieval.git
+  git clone https://github.com/AsunaYuuki197/image-retrieval.git
   cd image-retrieval
 ```
 
