@@ -130,5 +130,5 @@ def compare_images_cs_hp(query_embedding, db_embeddings):
     Returns:
         list: Ranked indices (using cosine similarity as fallback).
     """
-    st.warning("CS + HP not implemented. Using cosine similarity as fallback.")
+    st.warning("CS + HP not integreted cuz it needs offline Graph building and local descriptors. Using cosine similarity as fallback.")
     return compare_images_cosine(query_embedding, db_embeddings)
