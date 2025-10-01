@@ -1,156 +1,146 @@
 import streamlit as st
 import numpy as np
-from numpy.linalg import norm
-import os
-import requests
-from io import BytesIO
-from bs4 import BeautifulSoup
-from get_embedding import *
+import time
+from PIL import Image
+from image_loader import get_image_links_from_disk, get_image_links_from_drive, load_image
+from image_comparator import (
+    compare_images_matrix,
+    compare_images_feature,
+    compare_images_cosine,
+    compare_images_aqe,
+    compare_images_cas,
+    compare_images_cs_hp
+)
+from utils import display_top_images
+from config import TOP_K, MATRIX_THRESHOLD, FEATURE_THRESHOLD, NUM_COLS
 
-st.title("Image Comparison App")
+def main():
+    st.title("Image Comparison App")
 
-# get img links
-## from disk
-def get_image_links_from_disk(directory):
-    image_paths = [os.path.join(directory, img) for img in os.listdir(directory) if img.endswith(('png', 'jpg', 'jpeg'))]
-    return image_paths
+    # Image source selection
+    source = st.radio("Select image source:", ("From Disk", "From Google Drive"))
+    if 'image_links' not in st.session_state:
+        st.session_state.image_links = []
 
-## from cloud storage (Google Drive)
-def get_image_links_from_drive(folder_link):
-    url = f"{folder_link}"
-
-    response = requests.get(url)
-    if response.status_code != 200:
-        print("Failed to access the folder.")
-        return []
-    
-    soup = BeautifulSoup(response.text, 'html.parser')
-    image_paths = []
-    image_link = {}
-    for script in soup.find_all("script"):
-        if "https://drive.google.com/file/d/" in script.text:
-            lines = script.text.split(',')
-            for line in lines:
-                if "https://drive.google.com/file/d/" in line and line not in image_link.keys():
-                   
-                    image_link[line] = 1
-                    response = requests.get(line[1:-1])
-                    if response.status_code != 200:
-                        print("Failed to access the image.")
-                        break
-
-                    tmp_soup = BeautifulSoup(response.text, 'html.parser')
-
-                    for tmp_script in tmp_soup.find_all("script"):
-                        tmp_lines = tmp_script.text.split(',')
-                        for tmp_line in tmp_lines:
-                            if "drive.google.com/drive-viewer" in tmp_line and tmp_line not in image_paths:
-                                image_paths.append(tmp_line[1:-1].replace("\\u003d", "="))
-                                break
-    
-    
-    return image_paths
-
-
-# load image from disk or cloud
-def load_image(image_link):
-    if image_link.startswith(("http", "https")):
-        response = requests.get(image_link)
-        image = Image.open(BytesIO(response.content))
+    # Get image links based on the source
+    if source == "From Disk":
+        directory = st.text_input("Enter directory path to load images (e.g., C:\\Users\\ACER\\Pictures):")
+        if st.button("Load Images"):
+            st.session_state.image_links = get_image_links_from_disk(directory)
     else:
-        image = Image.open(image_link)
-    return image
+        directory = st.text_input("Enter Google Drive folder link (e.g., https://drive.google.com/drive/folders/{folder_id}):")
+        if st.button("Load Images"):
+            st.session_state.image_links = get_image_links_from_drive(directory)
 
+    # Display image links status
+    if st.session_state.image_links:
+        st.success(f"Loaded {len(st.session_state.image_links)} images successfully.")
+    else:
+        st.warning("No images loaded.")
 
-# compare by image matrix 
-def compare_images_matrix(img1, img2):
-    img1 = np.array(img1.resize((224, 224))) 
-    img2 = np.array(img2.resize((224, 224)))
+    # Upload query image
+    uploaded_image = st.file_uploader("Upload an image to compare:", type=["png", "jpg", "jpeg"])
 
-    if len(img1.shape) > 2 and img1.shape[2] == 4:  # RGBA to RGB
-        img1 = img1[:, :, :3]
-    if len(img2.shape) > 2 and img2.shape[2] == 4:  # RGBA to RGB
-        img2 = img2[:, :, :3]
+    # Image comparison method selection
+    compare_options = ["Matrix", "Feature", "Cosine Similarity"]
+    compare_options.append("AQE Reranking")
+    compare_options.append("CAS Reranking")
+    compare_options.append("CS + HP")
+    compare = st.radio("Compare by:", compare_options)
 
-    if len(img1.shape) == 2:  # img1 is grayscale
-        img1 = np.stack([img1] * 3, axis=-1)
-    if len(img2.shape) == 2:  # img1 is grayscale
-        img2 = np.stack([img2] * 3, axis=-1)
+    if st.button("Compare") and uploaded_image and st.session_state.image_links:
+        query_img = load_image(uploaded_image)
+        if query_img is None:
+            st.error("Failed to load query image.")
+            return
 
-    img1 = img1 / 255.0
-    img2 = img2 / 255.0
+        st.subheader("Query Image")
+        cols = st.columns(NUM_COLS)
+        with cols[0]:
+            st.image(query_img, caption=uploaded_image.name, use_container_width=True)
 
-    difference = np.mean(np.abs(img1 - img2))
-    return difference
+        st.write("Comparing to images from the selected source...")
 
-
-# compare by image context - feature
-def compare_images_feature(img1, img2):
-    img1_embedding = get_image_embedding(img1)
-    img2_embedding = get_image_embedding(img2)
-    return np.dot(img1_embedding,img2_embedding)/(norm(img1_embedding)*norm(img2_embedding)) # Cosine Similarity 
-
-
-
-# Image source selection
-source = st.radio("Select image source:", ("From Disk", "From Cloud Storage"))
-if 'image_links' not in st.session_state:
-    st.session_state.image_links = []
-
-# Get image links based on the source
-if source == "From Disk":
-    directory = st.text_input("Enter directory path to load images from disk (e.g: C:\\Users\\ACER\\Pictures):")
-    if st.button("Load"):
-        st.session_state.image_links = get_image_links_from_disk(directory)
-else:
-    directory = st.text_input("Enter folder link to load images from google drive (e.g: https://drive.google.com/drive/folders/{folder_id}):")
-    if st.button("Load"):
-        st.session_state.image_links = get_image_links_from_drive(directory)
-
-
-# Display image links
-if st.session_state.image_links:
-    st.write("Images loaded success")
-else:
-    st.write("Images loaded fail") 
-# Upload an image to compare
-uploaded_image = st.file_uploader("Upload an image to compare:", type=["png", "jpg", "jpeg"])
-
-
-# Image comparison
-compare = st.radio("Compare by:", ("Matrix", "Feature"))
-
-if st.button("Compare") and st.session_state.image_links and uploaded_image is not None:
-    img1 = Image.open(uploaded_image)
-    st.image(img1, caption="Uploaded Image", use_container_width=True)
-
-    st.write("Comparing to images from the selected source...")
-
-    results = []
-    for link in st.session_state.image_links:
-        img2 = load_image(link)
-
-        if compare == "Matrix":
-            # Compare by matrix
-            diff_score = compare_images_matrix(img1, img2)
+        # Load database image embeddings
+        db_embeddings = []
+        valid_image_links = []
+        for link in st.session_state.image_links:
+            img = load_image(link)
+            if img is None:
+                continue
+            from get_embedding import get_image_embedding
+            embedding = get_image_embedding(img)
+            db_embeddings.append(embedding)
+            valid_image_links.append(link)
         
-            if diff_score > 0.1:
-                continue
+        if not valid_image_links:
+            st.error("No valid images loaded from the source.")
+            return
+        db_embeddings = np.array(db_embeddings)
+
+        # Get query image embedding
+        from get_embedding import get_image_embedding
+        query_embedding = get_image_embedding(query_img)
+
+        ranks = []
+        start = time.time()
+        if compare == "Matrix":
+            results = []
+            for idx, link in enumerate(valid_image_links):
+                img = load_image(link)
+                if img is None:
+                    continue
+                score = compare_images_matrix(query_img, img)
+                if score <= MATRIX_THRESHOLD:
+                    results.append((idx, score))
+            results.sort(key=lambda x: x[1])  # Sort by difference (lower is better)
+            ranks = [idx for idx, _ in results]
+            elapsed = time.time() - start
+            display_top_images("Top Images (Matrix Comparison)", ranks, valid_image_links, f"Executed in {elapsed:.4f} seconds")
+
+        elif compare == "Feature":
+            results = []
+            for idx, link in enumerate(valid_image_links):
+                img = load_image(link)
+                if img is None:
+                    continue
+                score = compare_images_feature(query_img, img)
+                if score >= FEATURE_THRESHOLD:
+                    results.append((idx, score))
+            results.sort(key=lambda x: x[1], reverse=True)  # Sort by similarity (higher is better)
+            ranks = [idx for idx, _ in results]
+            elapsed = time.time() - start
+            display_top_images("Top Images (Feature Comparison)", ranks, valid_image_links, f"Executed in {elapsed:.4f} seconds")
+
+        elif compare == "Cosine Similarity":
+            ranks = compare_images_cosine(query_embedding, db_embeddings)
+            elapsed = time.time() - start
+            display_top_images("Top Images (Cosine Similarity)", ranks, valid_image_links, f"Executed in {elapsed:.4f} seconds")
+
+        elif compare == "AQE Reranking":
+            ranks = compare_images_aqe(query_embedding, db_embeddings)
+            elapsed = time.time() - start
+            display_top_images("Top Images (AQE Reranking)", ranks, valid_image_links, f"Executed in {elapsed:.4f} seconds")
+
+        elif compare == "CAS Reranking":
+            ranks = compare_images_cas(query_embedding, db_embeddings)
+            elapsed = time.time() - start
+            display_top_images("Top Images (CAS Reranking)", ranks, valid_image_links, f"Executed in {elapsed:.4f} seconds")
+
+        elif compare == "CS + HP":
+            ranks = compare_images_cs_hp(query_embedding, db_embeddings)
+            elapsed = time.time() - start
+            display_top_images("Top Images (CS + HP)", ranks, valid_image_links, f"Executed in {elapsed:.4f} seconds")
+
+        if ranks:
+            st.success("Comparison complete.")
         else:
-            # Compare by embedding 
-            diff_score = compare_images_feature(img1, img2)
-            if diff_score < 0.85:
-                continue
+            st.warning("No similar images found.")
+    else:
+        if not uploaded_image:
+            st.warning("Please upload an image to compare.")
+        if not st.session_state.image_links:
+            st.warning("Please load images from a source.")
 
-        results.append((link, diff_score))
-
-    st.write("Comparison complete. Displaying from the selected source...")    
-    # Return result image + image links
-    best_match = sorted(results, key=lambda x: x[1], reverse=True)
-    for i in best_match:
-        result_img = load_image(i[0])
-        st.image(result_img, caption=f"{i[0]}", use_container_width=True)
-    
-    st.write("Finished")
-
-
+if __name__ == "__main__":
+    main()
